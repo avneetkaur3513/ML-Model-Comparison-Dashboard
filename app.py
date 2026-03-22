@@ -364,34 +364,49 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Sidebar ──────────────────────────────────────────────────────────────
-    with st.sidebar:
-        st.markdown("## ⚙️ Configuration")
-        st.markdown("---")
+import streamlit as st
+import pandas as pd
 
-        uploaded_file = st.file_uploader(
-            "📂 Upload Dataset",
-            type=["csv", "xlsx", "xls"],
-            help="CSV or Excel files are supported",
-        )
+# Define your GitHub raw URL here
+DEFAULT_DATA_URL = "https://github.com/avneetkaur3513/ML-Model-Comparison-Dashboard/blob/main/sample_data.csv"
 
-        if uploaded_file is None:
-            st.info("👆 Upload a file to get started!")
-            st.markdown("---")
-            st.markdown("### 💡 Quick Guide")
-            st.markdown("""
-            1. Upload a CSV / Excel file  
-            2. Select feature columns  
-            3. Pick the target column  
-            4. Configure the train/test split  
-            5. Choose models to compare  
-            6. Hit **Train Models** 🚀
-            """)
-            return
+# ── Sidebar ──────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## ⚙️ Configuration")
+    st.markdown("---")
 
+    # 1. File Uploader
+    uploaded_file = st.file_uploader(
+        "📂 Upload Dataset",
+        type=["csv", "xlsx", "xls"],
+        help="Upload your own file to override the default dataset.",
+    )
+
+    # 2. Logic to decide which data to use
+    if uploaded_file is not None:
+        # Use user-uploaded file
         df = load_data(uploaded_file)
-        if df is None:
-            return
+        st.success("✅ Using your uploaded file!")
+    else:
+        # Use GitHub sample as default
+        try:
+            df = pd.read_csv(DEFAULT_DATA_URL) # Or load_data(DEFAULT_DATA_URL) if your function handles URLs
+            st.info("💡 Using default sample dataset from GitHub.")
+        except Exception as e:
+            st.error("Failed to load default dataset.")
+            st.stop()
+
+    # 3. Quick Guide (Always visible or conditional)
+    st.markdown("---")
+    st.markdown("### 💡 Quick Guide")
+    st.markdown("""
+    1. **Default mode:** The app uses the GitHub sample.
+    2. **Custom mode:** Upload a CSV/Excel to switch.
+    3. Select feature columns & target.
+    4. Hit **Train Models** 🚀
+    """)
+
+# Rest of your app continues here...
 
         st.success(f"✅ Loaded **{df.shape[0]}** rows × **{df.shape[1]}** columns")
         st.markdown("---")
