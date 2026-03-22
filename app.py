@@ -100,6 +100,40 @@ def get_models():
         "Decision Tree": DecisionTreeClassifier(max_depth=10, random_state=42),
     }
 
+def evaluate_models(models, X_train, X_test, y_train, y_test):
+    results = []
+    reports = {}
+
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+
+        metric_row = {
+            "Model": name,
+            "Accuracy": accuracy_score(y_test, y_pred),
+            "Precision": precision_score(y_test, y_pred, average="weighted", zero_division=0),
+            "Recall": recall_score(y_test, y_pred, average="weighted", zero_division=0),
+            "F1": f1_score(y_test, y_pred, average="weighted", zero_division=0),
+        }
+
+        # ROC-AUC is optional because not all datasets/models can compute it.
+        try:
+            if len(np.unique(y_test)) == 2 and hasattr(model, "predict_proba"):
+                y_prob = model.predict_proba(X_test)[:, 1]
+                metric_row["ROC-AUC"] = roc_auc_score(y_test, y_prob)
+            elif len(np.unique(y_test)) > 2 and hasattr(model, "predict_proba"):
+                y_prob = model.predict_proba(X_test)
+                metric_row["ROC-AUC"] = roc_auc_score(y_test, y_prob, multi_class="ovr")
+            else:
+                metric_row["ROC-AUC"] = np.nan
+        except Exception:
+            metric_row["ROC-AUC"] = np.nan
+
+        results.append(metric_row)
+        reports[name] = classification_report(y_test, y_pred, zero_division=0)
+
+    return pd.DataFrame(results).sort_values("F1", ascending=False), reports
+
 # (Note: Confusion Matrix and other plot functions from your original code are assumed to be here)
 # Copy-paste your plot_metric_comparison, plot_radar, etc. here...
 
@@ -164,13 +198,48 @@ def main():
 
     with tab_results:
         if train_btn:
+            if not feature_cols:
+                st.error("Please select at least one feature column.")
+                st.stop()
+            if not selected_model_names:
+                st.error("Please select at least one model.")
+                st.stop()
+
             X, y = preprocess_data(df, feature_cols, target_col)
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
-            
-            # Simple Training Logic (Expansion needed based on your original)
-            st.write("Training in progress...")
-            # ... insert your model training loop here ...
-            st.success("Done!")
+
+            selected_models = {name: get_models()[name] for name in selected_model_names}
+
+            with st.spinner("Training in progress..."):
+                results_df, reports = evaluate_models(selected_models, X_train, X_test, y_train, y_test)
+
+            st.success("Training complete.")
+            st.subheader("Model Performance")
+            st.dataframe(results_df, use_container_width=True)
+
+            plot_df = results_df.melt(
+                id_vars="Model",
+                value_vars=["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"],
+                var_name="Metric",
+                value_name="Score",
+            )
+            fig = px.bar(
+                plot_df,
+                x="Model",
+                y="Score",
+                color="Metric",
+                barmode="group",
+                template=PLOTLY_TEMPLATE,
+                color_discrete_sequence=COLORS,
+                title="Metric Comparison by Model",
+            )
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)")
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.subheader("Classification Reports")
+            for model_name, report_text in reports.items():
+                with st.expander(model_name):
+                    st.text(report_text)
         else:
             st.info("Click 'Train Models' to see results.")
 
